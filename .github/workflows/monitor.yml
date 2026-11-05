@@ -1,0 +1,61 @@
+name: Dakar appointment monitor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dakar-appointment-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Restore slot history
+        uses: actions/cache@v4
+        with:
+          path: data/slots.sqlite3
+          key: dakar-slots-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            dakar-slots-
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Chromium
+        run: playwright install --with-deps chromium
+
+      - name: Run both Dakar monitors
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BOOKING_URL: https://appointment.bmeia.gv.at/?Office=Dakar
+          DB_PATH: data/slots.sqlite3
+          DEBUG_DIR: data/debug
+          LOG_LEVEL: INFO
+        run: python app/check_once.py
+
+      - name: Save diagnostic snapshots if needed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dakar-monitor-debug-${{ github.run_id }}
+          path: data/debug/
+          if-no-files-found: ignore
+          retention-days: 3
