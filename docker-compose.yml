@@ -1,0 +1,8 @@
+services:
+  dakar-appointment-monitor:
+    build: .
+    container_name: dakar-appointment-monitor
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
